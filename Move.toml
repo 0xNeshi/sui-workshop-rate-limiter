@@ -1,0 +1,6 @@
+[package]
+name = "sui_workshop_rate_limiter"
+edition = "2024"
+
+[dependencies]
+openzeppelin_utils = { git = "https://github.com/OpenZeppelin/contracts-sui.git", subdir = "contracts/utils", rev = "main" }

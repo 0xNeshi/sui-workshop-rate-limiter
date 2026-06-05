@@ -1,54 +1,45 @@
-/// Example 1 — Faucet with a single, globally applied fixed window rate limiter.
-///
-/// One `RateLimiter` field on a shared `Faucet` throttles *all* claimers collectively: every
-/// caller draws from the same fixed window, which allows at most 100 coins per minute. At each
-/// minute boundary the allowance resets to the full 100. Claiming is permissionless — the
-/// limiter alone governs throughput.
 module sui_workshop_rate_limiter::simple_faucet;
 
-use openzeppelin_utils::rate_limiter::{Self, RateLimiter};
 use sui::balance::Balance;
-use sui::clock::Clock;
 use sui::coin::{Self, Coin};
-use sui::sui::SUI;
 
-/// Shared faucet holding pooled funds behind one global fixed window limiter.
+public struct SIMPLE_FAUCET has drop {}
+
 public struct Faucet has key {
     id: UID,
-    balance: Balance<SUI>,
-    limiter: RateLimiter,
+    balance: Balance<SIMPLE_FAUCET>,
 }
 
-/// Share a faucet throttled by a single global fixed window: at most 100 coins per minute,
-/// resetting to the full allowance on each minute boundary, starting full.
-public fun new(initial_deposit: Coin<SUI>, clock: &Clock, ctx: &mut TxContext) {
+fun init(witness: SIMPLE_FAUCET, ctx: &mut TxContext) {
+    let (mut currency, mut treasury_cap) = sui::coin_registry::new_currency_with_otw(
+        witness,
+        9,
+        "SIMPLE_FAUCET",
+        "Simple Faucet Token",
+        "",
+        "",
+        ctx,
+    );
+    let balance = treasury_cap.mint_balance(10_000);
+    currency.make_supply_fixed(treasury_cap);
+    let metadata_cap = currency.finalize(ctx);
+    transfer::public_freeze_object(metadata_cap);
+
     sui::transfer::share_object(Faucet {
         id: object::new(ctx),
-        balance: initial_deposit.into_balance(),
-        // 2. arm it: 100 / minute
-        limiter: rate_limiter::new_fixed_window(
-            100,
-            60_000,
-            clock.timestamp_ms(),
-            100,
-            clock,
-        ),
+        balance,
     })
 }
 
-/// Deposit funds into the faucet (no rate limit on the way in).
-public fun deposit(self: &mut Faucet, payment: Coin<SUI>) {
-    self.balance.join(payment.into_balance());
+public fun claim(self: &mut Faucet, amount: u64, ctx: &mut TxContext): Coin<SIMPLE_FAUCET> {
+    coin::from_balance(self.balance.split(amount), ctx)
 }
 
-/// Claim 1 SUI, charging the global limiter first. The rate-limit check runs before the
-/// balance split, so a denied claim never touches `balance`.
-public fun claim(self: &mut Faucet, clock: &Clock, ctx: &mut TxContext): Coin<SUI> {
-    self.limiter.consume_or_abort(1, clock);
-    coin::from_balance(self.balance.split(1), ctx)
+public fun balance(self: &Faucet): u64 {
+    self.balance.value()
 }
 
-/// How much the faucet will allow to be claimed right now (projects window reset on read).
-public fun claimable_now(self: &Faucet, clock: &Clock): u64 {
-    self.limiter.available(clock)
+#[test_only]
+public fun init_for_testing(ctx: &mut TxContext) {
+    init(SIMPLE_FAUCET {}, ctx)
 }

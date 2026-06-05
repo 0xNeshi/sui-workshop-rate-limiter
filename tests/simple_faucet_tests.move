@@ -20,7 +20,7 @@ fun faucet_global_throttle() {
 
     let mut faucet = scenario.take_shared<Faucet>();
 
-    // The bucket starts full at 100, shared across all claimers.
+    // The window starts full at 100, shared across all claimers.
     assert_eq!(faucet.claimable_now(&clock), 100);
     // Drain it completely: 100 claims of 1 SUI each.
     let mut i: u64 = 0;
@@ -30,14 +30,15 @@ fun faucet_global_throttle() {
     };
     assert_eq!(faucet.claimable_now(&clock), 0);
 
-    // The bucket refills 10 every minute, in whole-interval steps: nothing accrues mid-minute.
+    // The allowance resets only on a window boundary: nothing accrues mid-minute.
     clock.increment_for_testing(59_000);
     assert_eq!(faucet.claimable_now(&clock), 0);
-    // One full minute -> 10, two more minutes -> 30.
+    // Crossing the minute boundary resets to the full 100 at once.
     clock.increment_for_testing(1_000);
-    assert_eq!(faucet.claimable_now(&clock), 10);
+    assert_eq!(faucet.claimable_now(&clock), 100);
+    // Later windows stay capped at 100, never accumulating beyond the per-window limit.
     clock.increment_for_testing(120_000);
-    assert_eq!(faucet.claimable_now(&clock), 30);
+    assert_eq!(faucet.claimable_now(&clock), 100);
 
     ts::return_shared(faucet);
     clock::destroy_for_testing(clock);

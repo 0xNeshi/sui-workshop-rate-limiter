@@ -19,7 +19,7 @@ public struct Faucet has key {
 }
 
 /// Share a faucet throttled by a single global token bucket: at most 100 coins outstanding,
-/// refilling 100 every minute, starting full.
+/// refilling 10 every minute, starting full.
 public fun new(initial_deposit: Coin<SUI>, clock: &Clock, ctx: &mut TxContext) {
     sui::transfer::share_object(Faucet {
         id: object::new(ctx),
